@@ -970,6 +970,194 @@ docker-compose up -d
 
 ---
 
+# 👥 Team Members & Task Distribution
+ 
+| Name | Student ID | Role |
+|------|-----------|------|
+| Muhammad Ari Fathan Mahardika | 5025241013 | Backend Engineer |
+| Palpal Yalmialaam | 5025241002 | Frontend & Visualization Engineer |
+ 
+---
+ 
+## 🔧 Muhammad Ari Fathan Mahardika — Backend Engineer
+ 
+Responsible for the entire data pipeline infrastructure and backend setup.
+ 
+### 1. Docker & Infrastructure
+- Configured `docker-compose.yml` to run 5 services simultaneously:
+| Container | Function | Port |
+|-----------|----------|------|
+| `postgres` | Airflow internal database | - |
+| `airflow-webserver` | Airflow UI | 8080 |
+| `airflow-scheduler` | DAG scheduler | - |
+| `clickhouse-server` | Data Warehouse | 8123, 9000 |
+| `metabase` | BI Dashboard | 3000 |
+ 
+- Created custom `Dockerfile` for Airflow image with PySpark and Java JRE dependencies
+- Managed `requirements.txt` for all Python dependencies
+### 2. Apache Airflow DAG — `orders_pipeline.py`
+- Designed and built the DAG `orders_data_pipeline` with 2 sequential tasks
+- Configured schedule interval to run **every 30 minutes** (`*/30 * * * *`)
+- Set up task dependencies:
+```python
+fetch_orders_from_api >> process_and_load_to_clickhouse
+```
+ 
+### 3. Data Fetching — `fetch_orders.py`
+- Built HTTP request handler to hit `http://96.9.212.102:8000/orders`
+- Implemented JSON flattening logic to convert nested JSON into 2 separate DataFrames:
+```
+Nested JSON (100 orders)
+        ↓
+orders DataFrame      → one row per order
+                        (order_id, user_id, order_dow, order_hour_of_day, product_count)
+        ↓
+products DataFrame    → one row per product per order
+                        (order_id, product_name, aisle, department, reordered)
+```
+ 
+- Saved processed data as `.parquet` files to `data_lake/orders/`
+### 4. Data Processing — `process_orders.py`
+- Built PySpark processing pipeline to read `.parquet` files
+- Implemented **5 aggregation computations**:
+| Aggregation | Description | Output Table |
+|-------------|-------------|--------------|
+| Top Products | Top 30 most ordered products + reorder rate | `top_products` |
+| Department Stats | Total ordered, unique products, reorder rate per dept | `department_stats` |
+| Aisle Stats | Top 30 aisles by volume + department | `aisle_stats` |
+| Hourly Distribution | Order count per hour (0–23) | `hourly_distribution` |
+| Daily Distribution | Order count per day of week (0–6) | `dow_distribution` |
+ 
+- Implemented ClickHouse loader using **Truncate + Insert** strategy for all 7 tables
+- Added cleanup mechanism to delete processed `.parquet` files after loading
+### 5. ClickHouse Schema — `clickhouse_ddl.sql`
+- Designed schema for **7 tables** in `orders_analytics` database:
+**Raw Tables:**
+ 
+| Table | Description | Key Columns |
+|-------|-------------|-------------|
+| `orders` | One row per order | order_id, user_id, order_dow, order_hour_of_day, product_count |
+| `order_products` | One row per product per order | order_id, product_name, department, aisle, reordered |
+ 
+**Aggregation Tables:**
+ 
+| Table | Description | Key Columns |
+|-------|-------------|-------------|
+| `top_products` | Top 30 most ordered products | product_name, order_count, reorder_rate |
+| `department_stats` | Stats per department | department, total_products_ordered, reorder_rate |
+| `aisle_stats` | Stats per aisle | aisle, department, total_products_ordered |
+| `hourly_distribution` | Order distribution per hour | order_hour_of_day, order_count |
+| `dow_distribution` | Order distribution per day | order_dow, order_count |
+ 
+- Wrote `CREATE TABLE IF NOT EXISTS` DDL with appropriate data types and `MergeTree()` engine
+---
+ 
+## 🎨 Palpal Yalmialaam — Frontend & Visualization Engineer
+ 
+Responsible for all data visualization, dashboard design, and documentation.
+ 
+### 1. Metabase Setup & ClickHouse Connection
+- Configured Metabase account and connected to ClickHouse database
+- Set up connection parameters:
+| Field | Value |
+|-------|-------|
+| Host | `clickhouse-server` |
+| Port | `8123` |
+| Database | `orders_analytics` |
+| Username | `admin` |
+ 
+- Synced database schema to detect all 7 tables
+### 2. SQL Queries for Visualization
+Wrote **27 SQL queries** across 3 dashboard SQL files:
+ 
+| File | Queries | Purpose |
+|------|---------|---------|
+| `dashboard1_executive_summary.sql` | 11 queries | KPI cards, department charts, top products |
+| `dashboard2_pattern_analysis.sql` | 8 queries | Time patterns, product distribution |
+| `dashboard3_business_insights.sql` | 8 queries | Loyalty analysis, performance matrix |
+ 
+Query types include: KPI aggregations, time-based distributions, ranking queries, proportion calculations with `ROW_NUMBER()`, loyalty scoring with `CASE WHEN`, and combo metrics.
+ 
+### 3. Dashboard 1: Executive Summary
+**Purpose**: High-level overview of the dataset at a glance.
+ 
+| # | Question | Chart Type | Insight |
+|---|----------|------------|---------|
+| Q1 | Total Orders | Number | 100 orders total |
+| Q2 | Total Products Ordered | Number | ~994 products |
+| Q3 | Unique Users | Number | 100 unique users |
+| Q4 | Average Basket Size | Number | 9.94 products/order |
+| Q5 | Overall Reorder Rate | Number | % of re-orders |
+| Q6 | Total Unique Products | Number | Variety of products |
+| Q7 | Total Departments | Number | Number of departments |
+| Q8 | Total Aisles | Number | Number of aisles |
+| Q9 | Top 10 Departments by Volume | Horizontal Bar | Produce dominates |
+| Q10 | Top 5 Department Proportion | Donut | Composition breakdown |
+| Q11 | Top 10 Best-Selling Products | Horizontal Bar | Banana is #1 |
+ 
+### 4. Dashboard 2: Pattern Analysis
+**Purpose**: Analyze when and where orders happen.
+ 
+| # | Question | Chart Type | Insight |
+|---|----------|------------|---------|
+| Q1 | Order by Time Period | Donut | Afternoon = 43% |
+| Q2 | Weekday vs Weekend Proportion | Donut | Weekday = 74% |
+| Q3 | Orders by Day of Week | Bar (Vertical) | Monday is busiest |
+| Q4 | Orders by Hour of Day | Area Chart | Peak at 10am & 3pm |
+| Q5 | Top 15 Aisles | Horizontal Bar | Fresh veggies #1 |
+| Q6 | Top 10 Aisles in Top Department | Horizontal Bar | Produce deep dive |
+| Q7 | Basket Size Distribution | Bar (Vertical) | Most orders: 5-10 items |
+| Q8 | Peak vs Off-Peak Hours | Donut | Peak = 53% |
+ 
+### 5. Dashboard 3: Business Insights
+**Purpose**: Actionable insights for business decisions.
+ 
+| # | Question | Chart Type | Insight |
+|---|----------|------------|---------|
+| Q1 | Department Ranking by Reorder Rate | Horizontal Bar | Alcohol most loyal |
+| Q2 | Top 20 Products with Highest Reorder | Horizontal Bar | Organic items dominant |
+| Q3 | Customer Loyalty Distribution | Donut | High/Medium/Low tiers |
+| Q4 | Department: Total vs Reorder Rate | Combo | Volume vs loyalty gap |
+| Q5 | Complete Product Leaderboard | Bar | Full product ranking |
+| Q6 | Bottom 10 Products | Horizontal Bar | Candidates for promo |
+| Q7 | Products: Order vs Reorder Rate | Area | Distribution pattern |
+| Q8 | Reorder vs New Order | Donut | Loyalty breakdown |
+ 
+**Key Business Recommendations (added as Text Card in dashboard):**
+```
+1. Focus stock on Produce & Dairy Eggs (46% of total sales)
+2. Optimize staffing during hours 10–17 (peak = 50% of orders)
+3. Improve reorder rate in low-loyalty departments
+4. Investigate bottom 10 products — discontinue or promote?
+5. Weekend promotion opportunity (only 26% of orders)
+```
+ 
+### 6. README Documentation
+- Wrote complete English documentation covering full project explanation
+- Documented step-by-step tutorial from Docker setup to dashboard completion
+- Created detailed task distribution breakdown
+- Documented ClickHouse schema reference
+- Wrote troubleshooting guide for common errors
+---
+ 
+## 📊 Task Distribution Summary
+ 
+| Task | Fathan | Palpal |
+|------|--------|--------|
+| Docker & Infrastructure | ✅ | |
+| Apache Airflow DAG | ✅ | |
+| Data Fetching (fetch_orders.py) | ✅ | |
+| Data Processing with PySpark | ✅ | |
+| ClickHouse Schema & DDL | ✅ | |
+| Metabase Setup & Connection | | ✅ |
+| SQL Queries (27 queries) | | ✅ |
+| Dashboard 1: Executive Summary | | ✅ |
+| Dashboard 2: Pattern Analysis | | ✅ |
+| Dashboard 3: Business Insights | | ✅ |
+| README Documentation | | ✅ |
+
+---
+
 ## 👥 Kelompok 15 — MCI 2026
 
 Penugasan Ke-2: Pipeline Orchestration & Data Visualization (Modul 2 & 3)
