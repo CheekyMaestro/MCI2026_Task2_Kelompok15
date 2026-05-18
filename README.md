@@ -2,7 +2,7 @@
 
 > **End-to-End Data Pipeline**: REST API → Apache Airflow → PySpark → ClickHouse → Metabase
 
-Proyek ini membangun pipeline data **otomatis** yang mengambil data pesanan (orders) dari REST API, memprosesnya dengan Apache Spark, menyimpannya ke ClickHouse sebagai data warehouse, dan memvisualisasikannya melalui Metabase dashboard — seluruhnya diorkestrasi oleh Apache Airflow dan dikemas dalam Docker.
+Proyek ini membangun pipeline data **otomatis** yang mengambil data pesanan (orders) dari REST API, memprosesnya dengan Apache Spark, menyimpannya ke ClickHouse sebagai data warehouse, dan memvisualisasikannya melalui Metabase dashboard — seluruhnya diorkestrasi oleh Apache Airflow dan dikemas dalam Docker.a
 
 ---
 
